@@ -48,4 +48,21 @@ prowl call extract_domain_from_url --params '{"url":"https://stripe.com/pricing"
 prowl analyze "competitors of stripe.com" --tier basic --json
 ```
 
+
+## Install from GitHub Packages
+
+This package is also published to the GitHub Packages npm registry under the `PROWL-AI` org. To install from there, point the `@prowl-ai` scope at GitHub Packages and authenticate with a token that has `read:packages`:
+
+```
+# .npmrc
+@prowl-ai:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+```bash
+npm install -g @prowl-ai/cli --registry=https://npm.pkg.github.com
+```
+
+The default install (`npm install -g @prowl-ai/cli`) uses the public npmjs.org registry and needs no auth.
+
 Requires Node.js >= 18. MIT licensed. Source: https://github.com/PROWL-AI/prowl-cli
