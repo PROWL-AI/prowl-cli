@@ -1,0 +1,37 @@
+{
+  "name": "@prowl-ai/cli",
+  "version": "0.1.0",
+  "description": "Prowl CLI \u2014 command-line client for the Prowl MCP: 385 market-intelligence tools (SEO, ads, SERP, scraping, AI) on pay-as-you-go USD wallet billing.",
+  "type": "module",
+  "bin": {
+    "prowl": "./src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "prowl",
+    "mcp",
+    "market-intelligence",
+    "seo",
+    "ads",
+    "serp",
+    "competitive-analysis",
+    "cli"
+  ],
+  "homepage": "https://prowl.chat/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PROWL-AI/prowl-cli.git"
+  },
+  "license": "MIT",
+  "author": "prowl.chat"
+}
