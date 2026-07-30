@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { run } from "../src/index.js";
 import { EXIT } from "../src/errors.js";
 
@@ -77,7 +78,17 @@ test("auth status without key, --json", async () => {
   } finally { if (prev !== undefined) process.env.PROWL_API_KEY = prev; }
 });
 
-test("version", async () => {
+test("version matches the package manifest", async () => {
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   const r = await run(["version"]);
-  assert.equal(r.out, "0.1.0");
+  assert.equal(r.out, pkg.version);
+});
+
+test("help advertises the current tool count and every command", async () => {
+  const r = await run([]);
+  assert.equal(r.code, EXIT.OK);
+  assert.match(r.out, /408 market-intelligence tools/);
+  for (const cmd of ["auth", "tools", "call", "analyze", "wallet", "version"]) {
+    assert.match(r.out, new RegExp(`^\\s+${cmd}\\b`, "m"), `help omits "${cmd}"`);
+  }
 });

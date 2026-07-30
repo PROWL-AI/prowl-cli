@@ -7,7 +7,13 @@ import { callCmd } from "./commands/call.js";
 import { analyzeCmd } from "./commands/analyze.js";
 import { walletCmd } from "./commands/wallet.js";
 import { authCmd } from "./commands/auth.js";
-const HELP = `prowl \u2014 CLI for the Prowl MCP (385 market-intelligence tools)
+import { readFileSync } from "node:fs";
+
+// Single source of truth for the version: the package manifest that ships with
+// the tarball. Hardcoding it here drifts from package.json on every release.
+export const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+
+const HELP = `prowl \u2014 CLI for the Prowl MCP (408 market-intelligence tools)
 
 USAGE
   prowl <command> [args] [--json] [--key <prowl_...>]
@@ -18,6 +24,7 @@ COMMANDS
   call <tool_name> --params '<json>'
   analyze "<query>" [--tier basic|deep|max] [--playbook <id>] [--session <id>]
   wallet
+  version
 
 FLAGS: --json  --key <k>  -h/--help
 Get a key at https://prowl.chat. Keys are billing-bearing \u2014 keep them secret.`;
@@ -35,7 +42,7 @@ export async function run(argv, { fetchImpl } = {}) {
       case "call": result = await callCmd(rest, ctx); break;
       case "analyze": result = await analyzeCmd(rest, ctx); break;
       case "wallet": result = await walletCmd(rest, ctx, { fetchImpl }); break;
-      case "version": result = "0.1.0"; break;
+      case "version": result = VERSION; break;
       default: return { code: EXIT.USAGE, err: `Unknown command: ${cmd}\n\n${HELP}` };
     }
     const out = ctx.json ? JSON.stringify(result) : (typeof result === "string" ? result : JSON.stringify(result, null, 2));
