@@ -69,11 +69,17 @@ async function watch(ctx, params, args) {
   // the id of a run that is being billed.
   if (!ctx.quiet) process.stderr.write(`session ${id} started; polling every ${intervalS}s (the run continues if this exits)\n`);
 
+  // The server's own job states (mcp_server/jobs.py): queued, running,
+  // completed, failed, cancelled — plus `empty`, `not_found` and `unknown` from
+  // the store path. Anything not in the in-progress pair is terminal and ends
+  // the loop, so an unrecognised state stops rather than polling forever.
+  const IN_PROGRESS = new Set(["queued", "running"]);
+
   for (;;) {
     const status = await client.callTool("prowl_session_status", { session_id: id });
     const json = toolJson(status);
     const state = typeof json === "object" && json ? json.status : null;
-    if (state && state !== "running" && state !== "pending" && state !== "queued") {
+    if (state && !IN_PROGRESS.has(state)) {
       if (state === "failed") throw new CliError(`Session ${id} failed: ${toolText(status)}`, EXIT.RUNTIME);
       return ctx.json ? json : toolText(status);
     }

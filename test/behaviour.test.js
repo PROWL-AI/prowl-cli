@@ -196,3 +196,68 @@ test("wallet surfaces a key cap that sits below the balance", () => {
   assert.match(out, /refused while the wallet still has funds/);
   assert.match(out, /only seo/);
 });
+
+// ── session --watch, the shape a CI step wants ─────────────────────
+
+test("session start --watch polls until the run leaves the in-progress states", async () => {
+  const states = ["running", "running", "completed"];
+  let poll = 0;
+  const calls = [];
+  const mk = (obj) => ({
+    status: 200,
+    ok: true,
+    headers: { get: (k) => (k.toLowerCase() === "content-type" ? "application/json" : "sess-1") },
+    text: async () => JSON.stringify(obj),
+    json: async () => obj,
+  });
+  const fetchImpl = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (body.method === "initialize") return mk({ jsonrpc: "2.0", id: body.id, result: {} });
+    if (body.method === "notifications/initialized") return mk({});
+    calls.push(body.params.name);
+    const payload =
+      body.params.name === "prowl_start_session"
+        ? { session_id: "s-42", status: "running" }
+        : { session_id: "s-42", status: states[Math.min(poll++, states.length - 1)], progress: 0.5, report: "done" };
+    return mk({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: JSON.stringify(payload) }] } });
+  };
+  const r = await runClean(run, ["session", "start", "q", "--watch", "--interval", "1", "--json", "--quiet", ...KEY], { fetchImpl });
+  assert.equal(r.code, EXIT.OK);
+  assert.equal(calls[0], "prowl_start_session");
+  assert.ok(calls.slice(1).every((c) => c === "prowl_session_status"));
+  assert.equal(JSON.parse(r.out).status, "completed");
+});
+
+test("session start --watch surfaces a failed run as a non-zero exit", async () => {
+  const mk = (obj) => ({
+    status: 200,
+    ok: true,
+    headers: { get: () => "application/json" },
+    text: async () => JSON.stringify(obj),
+    json: async () => obj,
+  });
+  const fetchImpl = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (body.method === "initialize") return mk({ jsonrpc: "2.0", id: body.id, result: {} });
+    if (body.method === "notifications/initialized") return mk({});
+    const payload = body.params.name === "prowl_start_session" ? { session_id: "s-9", status: "running" } : { session_id: "s-9", status: "failed", error: "provider down" };
+    return mk({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: JSON.stringify(payload) }] } });
+  };
+  const r = await runClean(run, ["session", "start", "q", "--watch", "--interval", "1", "--quiet", ...KEY], { fetchImpl });
+  assert.equal(r.code, EXIT.RUNTIME);
+  assert.match(r.err, /failed/);
+});
+
+test("session start --watch stops on an unrecognised state rather than polling forever", async () => {
+  const mk = (obj) => ({ status: 200, ok: true, headers: { get: () => "application/json" }, text: async () => JSON.stringify(obj), json: async () => obj });
+  const fetchImpl = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (body.method === "initialize") return mk({ jsonrpc: "2.0", id: body.id, result: {} });
+    if (body.method === "notifications/initialized") return mk({});
+    const payload = body.params.name === "prowl_start_session" ? { session_id: "s-1", status: "running" } : { session_id: "s-1", status: "not_found" };
+    return mk({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: JSON.stringify(payload) }] } });
+  };
+  const r = await runClean(run, ["session", "start", "q", "--watch", "--interval", "1", "--quiet", ...KEY], { fetchImpl });
+  assert.equal(r.code, EXIT.OK);
+  assert.match(r.out, /not_found/);
+});
