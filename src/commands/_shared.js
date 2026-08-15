@@ -18,7 +18,7 @@ function classify(text) {
 
 /** Call one MCP tool and render it for the active output mode. */
 export async function runTool(ctx, name, params = {}, { timeoutMs } = {}) {
-  const client = ctx.client || new McpClient(ctx.key, { fetchImpl: ctx.fetchImpl, timeoutMs });
+  const client = new McpClient(ctx.key, { fetchImpl: ctx.fetchImpl, timeoutMs });
   const result = await client.callTool(name, compact(params), { timeoutMs });
   const text = toolText(result);
   if (/^\s*Error:/.test(text)) throw new CliError(text.trim(), classify(text));
