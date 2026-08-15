@@ -1,12 +1,25 @@
-import { McpClient, toolJson, toolText } from "../mcp.js";
-import { CliError, EXIT } from "../errors.js";
-const TIERS = new Set(["basic", "deep", "max"]);
+import { LONG_TIMEOUT_MS } from "../mcp.js";
+import { strFlag } from "../args.js";
+import { need, oneOf, runTool } from "./_shared.js";
+
+export const TIERS = ["basic", "deep", "max"];
+
 export async function analyzeCmd(args, ctx) {
-  const query = args._[0]; if (!query) throw new CliError('usage: prowl analyze "<query>" [--tier basic|deep|max] [--playbook <id>] [--session <id>]', EXIT.USAGE);
-  const tier = args.tier || "basic"; if (!TIERS.has(tier)) throw new CliError("--tier must be one of basic|deep|max", EXIT.USAGE);
-  const params = { query, execution_mode: tier };
-  if (args.playbook) params.playbook_id = args.playbook; if (args.session) params.session_id = args.session;
-  const client = new McpClient(ctx.key, { fetchImpl: ctx.fetchImpl });
-  const r = await client.callTool("prowl_analyze", params);
-  return ctx.json ? toolJson(r) : toolText(r);
+  const query = need(args, 0, 'prowl analyze "<query>" [--tier basic|deep|max] [--playbook <id>] [--session <id>]');
+  const tier = oneOf(args.tier, TIERS, "tier") || "basic";
+  return runTool(
+    ctx,
+    "prowl_analyze",
+    {
+      query,
+      // The server parameter is `execution_mode`. `--tier` is the CLI's word for
+      // it because that is what the pricing page calls it; the mapping happens
+      // here, once. A client that sent `tier` would have it ignored and get a
+      // basic run back under a deep label.
+      execution_mode: tier,
+      playbook_id: strFlag(args, "playbook"),
+      session_id: strFlag(args, "session"),
+    },
+    { timeoutMs: LONG_TIMEOUT_MS },
+  );
 }
