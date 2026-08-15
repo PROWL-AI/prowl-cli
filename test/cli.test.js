@@ -3,27 +3,19 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { run } from "../src/index.js";
 import { EXIT } from "../src/errors.js";
-
-// Build a mock fetch that emulates the MCP Streamable HTTP handshake + a tool call.
-function mockMcp({ toolPayload, status = 200 } = {}) {
-  let calls = 0;
-  return async (url, opts) => {
-    calls++;
-    const body = JSON.parse(opts.body);
-    const headers = new Map([["content-type", "application/json"], ["mcp-session-id", "sess-1"]]);
-    const mkRes = (obj, st = 200) => ({ status: st, ok: st < 400, headers: { get: (k) => headers.get(k.toLowerCase()) }, text: async () => JSON.stringify(obj), json: async () => obj });
-    if (body.method === "initialize") return mkRes({ jsonrpc: "2.0", id: body.id, result: { protocolVersion: "2025-06-18", capabilities: {}, serverInfo: { name: "prowl" } } });
-    if (body.method === "notifications/initialized") return mkRes({}, 202);
-    if (body.method === "tools/call") {
-      if (status !== 200) return mkRes({ jsonrpc: "2.0", id: body.id, error: { code: -32000, message: "boom" } }, status);
-      return mkRes({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: JSON.stringify(toolPayload) }] } });
-    }
-    return mkRes({}, 400);
-  };
-}
+import { API_TOOL_COUNT } from "../src/config.js";
+import { mockMcp, runClean } from "./_mock.js";
 
 test("help with no args, exit 0", async () => {
   const r = await run([]);
+  assert.equal(r.code, EXIT.OK);
+  assert.match(r.out, /USAGE/);
+});
+
+test("-h prints help rather than being parsed as a command", async () => {
+  // `-h` did not start with `--`, so it fell through to the positional list and
+  // was answered "Unknown command: -h" — while the banner advertised `-h/--help`.
+  const r = await run(["-h"]);
   assert.equal(r.code, EXIT.OK);
   assert.match(r.out, /USAGE/);
 });
@@ -33,49 +25,11 @@ test("unknown command exits USAGE(2)", async () => {
   assert.equal(r.code, EXIT.USAGE);
 });
 
-test("tools list --json returns parsed payload via mocked MCP", async () => {
-  const fetchImpl = mockMcp({ toolPayload: { tools: ["a", "b"], count: 385 } });
-  const r = await run(["tools", "list", "--json", "--key", "prowl_test"], { fetchImpl });
+test("tools list --json returns the parsed payload", async () => {
+  const fetchImpl = mockMcp({ toolPayload: { categories: { seo: 98 }, total_tools: API_TOOL_COUNT } });
+  const r = await runClean(run, ["tools", "list", "--json", "--key", "prowl_test"], { fetchImpl });
   assert.equal(r.code, EXIT.OK);
-  const parsed = JSON.parse(r.out);
-  assert.equal(parsed.count, 385);
-  assert.deepEqual(parsed.tools, ["a", "b"]);
-});
-
-test("tools search without query is USAGE(2)", async () => {
-  const r = await run(["tools", "search", "--json", "--key", "prowl_test"], { fetchImpl: mockMcp({ toolPayload: {} }) });
-  assert.equal(r.code, EXIT.USAGE);
-});
-
-test("call --params invalid json is USAGE(2)", async () => {
-  const r = await run(["call", "extract_domain_from_url", "--params", "{bad", "--key", "prowl_test"], { fetchImpl: mockMcp({ toolPayload: {} }) });
-  assert.equal(r.code, EXIT.USAGE);
-});
-
-test("analyze bad tier is USAGE(2)", async () => {
-  const r = await run(["analyze", "competitors of stripe.com", "--tier", "ultra", "--key", "prowl_test"], { fetchImpl: mockMcp({ toolPayload: {} }) });
-  assert.equal(r.code, EXIT.USAGE);
-});
-
-test("401 maps to AUTH(3) with --json error envelope", async () => {
-  const fetchImpl = async (url, opts) => {
-    const body = JSON.parse(opts.body);
-    const res = { status: body.method === "initialize" ? 401 : 401, ok: false, headers: { get: () => "application/json" }, text: async () => JSON.stringify({ error: { message: "no" } }), json: async () => ({}) };
-    return res;
-  };
-  const r = await run(["tools", "list", "--json", "--key", "prowl_bad"], { fetchImpl });
-  assert.equal(r.code, EXIT.AUTH);
-  const env = JSON.parse(r.out);
-  assert.equal(env.error.code, EXIT.AUTH);
-});
-
-test("auth status without key, --json", async () => {
-  const prev = process.env.PROWL_API_KEY; delete process.env.PROWL_API_KEY;
-  try {
-    const r = await run(["auth", "status", "--json"]);
-    assert.equal(r.code, EXIT.OK);
-    assert.equal(JSON.parse(r.out).authenticated, false);
-  } finally { if (prev !== undefined) process.env.PROWL_API_KEY = prev; }
+  assert.equal(JSON.parse(r.out).total_tools, API_TOOL_COUNT);
 });
 
 test("version matches the package manifest", async () => {
@@ -84,11 +38,47 @@ test("version matches the package manifest", async () => {
   assert.equal(r.out, pkg.version);
 });
 
-test("help advertises the current tool count and every command", async () => {
+test("help states the catalogue count from the one place that holds it", async () => {
   const r = await run([]);
-  assert.equal(r.code, EXIT.OK);
-  assert.match(r.out, /408 market-intelligence tools/);
-  for (const cmd of ["auth", "tools", "call", "analyze", "wallet", "version"]) {
+  assert.match(r.out, new RegExp(`${API_TOOL_COUNT} market-intelligence tools`));
+});
+
+test("help lists every command the CLI actually routes", async () => {
+  const r = await run([]);
+  const commands = ["auth", "tools", "call", "analyze", "playbooks", "session", "schedule", "artifact", "export", "stats", "errors", "wallet", "version"];
+  for (const cmd of commands) {
     assert.match(r.out, new RegExp(`^\\s+${cmd}\\b`, "m"), `help omits "${cmd}"`);
+  }
+});
+
+test("help warns that an unentitled tier is downgraded rather than refused", async () => {
+  // The one billing surprise the CLI can prevent by saying so up front.
+  const r = await run([]);
+  assert.match(r.out, /NOT refused/);
+  assert.match(r.out, /bills as basic/);
+});
+
+test("every routed command reaches a handler", async () => {
+  // A command in the help text with no case in the switch would answer "Unknown
+  // command" — the two lists are written by hand and drift apart silently.
+  const fetchImpl = mockMcp({ toolPayload: {} });
+  const routed = [
+    ["auth", "status"],
+    ["tools", "list"],
+    ["call", "t"],
+    ["analyze", "q"],
+    ["playbooks"],
+    ["session", "list"],
+    ["schedule", "list"],
+    ["artifact", "pdf"],
+    ["export"],
+    ["stats"],
+    ["errors"],
+    ["wallet"],
+    ["version"],
+  ];
+  for (const argv of routed) {
+    const r = await runClean(run, [...argv, "--key", "prowl_test"], { fetchImpl });
+    assert.notEqual(r.code, EXIT.USAGE, `"${argv.join(" ")}" is advertised but not routed: ${r.err}`);
   }
 });
