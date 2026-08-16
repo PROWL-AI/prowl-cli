@@ -1,0 +1,200 @@
+name: release
+
+# One workflow for the whole release, started by a `v*` tag.
+#
+# What it replaces: two workflows, `publish-npmjs.yml` and `publish-gpr.yml`, both
+# firing on `release: published` — which meant a human had to cut the GitHub release
+# by hand before anything happened, and two publishers raced on one event. Neither
+# checked that the tag matched package.json, neither skipped a version already on the
+# registry (a re-run was a hard 403), neither published provenance, and neither
+# treated "published" as a claim to be verified. GPR had no enable flag at all.
+#
+# Off by default, per repository: `release` needs the RELEASE_ENABLED variable,
+# npm publishing needs PUBLISH_NPMJS, GitHub Packages needs PUBLISH_GPR
+# (Settings -> Secrets and variables -> Actions -> Variables). A fork arms whichever
+# halves it wants without touching this file.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing vX.Y.Z tag to release and publish"
+        required: false
+        type: string
+
+jobs:
+  # The whole suite, on the tag, before anything is published — as a dependency
+  # rather than as copied steps, so a red run here genuinely stops the release.
+  validate:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: validate
+    if: vars.RELEASE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.t.outputs.tag }}
+      ver: ${{ steps.t.outputs.ver }}
+    steps:
+      - name: Resolve the tag
+        id: t
+        run: |
+          set -eu
+          TAG="${{ inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "ver=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.t.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: The tag must match the package it claims to ship
+        run: |
+          set -eu
+          PV=$(node -p "require('./package.json').version")
+          if [ "$PV" != "${{ steps.t.outputs.ver }}" ]; then
+            echo "tag ${{ steps.t.outputs.tag }} does not match package.json $PV"; exit 1
+          fi
+
+      - name: Extract this version's CHANGELOG section
+        run: |
+          set -eu
+          # Permissive about the heading shape on purpose: `## v1.2.3`, `## 1.2.3`,
+          # `## [1.2.3] - date`. A mismatch fails AFTER the tag is public, and the tag
+          # then looks delivered while nothing shipped. The terminator requires a full
+          # semver so a `### Fixed` subsection cannot end the extraction early.
+          awk -v v="${{ steps.t.outputs.ver }}" '
+            $0 ~ "^## \\[?v?" v "\\]?([^0-9]|$)" {f=1; next}
+            /^## \[?v?[0-9]+\.[0-9]+\.[0-9]+/ {f=0}
+            f {print}
+          ' CHANGELOG.md > /tmp/notes.md
+          test -s /tmp/notes.md || { echo "no CHANGELOG section for ${{ steps.t.outputs.ver }}"; exit 1; }
+
+      - name: Create or refresh the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          # Re-runnable: creating a release that already exists is an error, and that
+          # aborts the run before anything downstream can happen.
+          if gh release view "${{ steps.t.outputs.tag }}" >/dev/null 2>&1; then
+            gh release edit "${{ steps.t.outputs.tag }}" --notes-file /tmp/notes.md
+            echo "release ${{ steps.t.outputs.tag }} already existed — notes refreshed"
+          else
+            gh release create "${{ steps.t.outputs.tag }}" \
+              --title "${{ steps.t.outputs.tag }} — @prowl-ai/cli" \
+              --notes-file /tmp/notes.md --latest
+          fi
+
+  npmjs:
+    needs: release
+    if: vars.PUBLISH_NPMJS == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # What npm trusted publishing (OIDC) needs, and what signs provenance. Name
+      # this workflow as the package's trusted publisher on npmjs.com and the
+      # NPM_TOKEN secret can be deleted entirely.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: npm must be new enough for trusted publishing
+        run: |
+          set -eu
+          # OIDC publishing needs npm >= 11.5.1 and the bundled npm is not guaranteed
+          # to be; without this the failure is an opaque auth error.
+          npm install -g npm@latest
+          npm --version
+
+      - name: Is this version already on the registry?
+        id: pub
+        run: |
+          set -eu
+          NAME=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+          # Publishing over an existing version is a hard 403, so a re-run, or a tag
+          # pushed after a manual publish, must not fail the release.
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "$NAME@$VER is already published — nothing to do"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        if: steps.pub.outputs.skip == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+      - name: The registry must actually serve it
+        if: steps.pub.outputs.skip == 'false'
+        run: |
+          set -eu
+          # The read replica lags the write master by a minute or two, so a fresh
+          # publish can still 404 on read. "Published" is a claim until it is served.
+          for _ in $(seq 1 18); do
+            got=$(npm view "${{ steps.pub.outputs.name }}" version 2>/dev/null || echo "")
+            if [ "$got" = "${{ steps.pub.outputs.ver }}" ]; then
+              echo "OK: the registry serves ${{ steps.pub.outputs.name }}@$got"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "the registry still does not serve ${{ steps.pub.outputs.ver }} after three minutes"
+          exit 1
+
+  gpr:
+    # GitHub Packages. Kept rather than deleted: whether anyone consumes
+    # `@prowl-ai/cli` from GPR could not be established — reading the org's packages
+    # needs a `read:packages` scope this project's tooling does not have — and
+    # removing a publishing channel on the strength of not being able to look is the
+    # same mistake as trusting a source file over a deployment. It is now gated like
+    # everything else; it used to publish on every release with no flag at all.
+    needs: release
+    if: vars.PUBLISH_GPR == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@prowl-ai"
+
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          NAME=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VER" version --registry https://npm.pkg.github.com >/dev/null 2>&1; then
+            echo "$NAME@$VER is already on GitHub Packages — nothing to do"
+            exit 0
+          fi
+          npm publish

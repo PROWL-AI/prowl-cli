@@ -5,6 +5,11 @@ on:
     branches: ["**"]
   pull_request:
   workflow_dispatch:
+  # Callable, so `release.yml` can depend on it. Re-implementing these checks as
+  # steps inside the release is how a red suite stops being able to stop a publish:
+  # a separate workflow going red cannot fail another one. The sibling repository
+  # `prowl-skill` hit that shape and fixed it the same way.
+  workflow_call:
 
 permissions:
   contents: read

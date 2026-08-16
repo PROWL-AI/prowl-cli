@@ -1,0 +1,74 @@
+name: auto-tag
+
+# A merge that bumps the version cuts the tag; a merge that does not publishes
+# nothing.
+#
+# The trigger is deliberately not the merge itself — it is the **version bump inside
+# it**. Publishing on every push to master would make every work-in-progress state a
+# release somebody's `npx` picks up. Deciding to release stays a reviewed edit to one
+# line of package.json; only the mechanical part after that decision is automated.
+#
+# On a push to master, compare package.json's version against the tags that exist. If
+# `v<version>` is missing, create and push it, which starts `release.yml` exactly as a
+# hand-pushed tag would. If it exists, say so and stop.
+#
+# Two properties it must keep:
+#   - **Idempotent.** A tag that already exists is the normal case, not an error.
+#   - **It cannot retrigger itself.** The trigger is a branch filter, and a tag push
+#     matches no branch filter.
+#
+# TAG_PAT: GitHub refuses to start a workflow from an event created with the default
+# GITHUB_TOKEN, to stop runaway loops. A tag pushed with it therefore releases
+# nothing — the worst outcome, because the repo looks tagged while npm stays behind.
+# This is not theoretical: it happened on the first live run of the equivalent
+# workflow in `prowl-skill`, and the release had to be dispatched by hand. With
+# `TAG_PAT` set to a token carrying `contents: write`, the tag starts `release.yml`
+# normally; without it, the tag is still created and this job says so loudly.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.TAG_PAT || github.token }}
+
+      - name: Cut the tag if the version moved
+        env:
+          HAS_PAT: ${{ secrets.TAG_PAT != '' }}
+        run: |
+          set -eu
+          VER=$(node -p "require('./package.json').version")
+          TAG="v$VER"
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG already exists — the version did not move. Nothing to do."
+            exit 0
+          fi
+
+          # A version with no CHANGELOG section fails the release AFTER the tag is
+          # public, and the tag then looks delivered while nothing shipped. Refuse
+          # here, where refusing is free.
+          if ! grep -qE "^## \[?v?$VER\]?([^0-9]|$)" CHANGELOG.md; then
+            echo "package.json is $VER and CHANGELOG.md has no section for it."
+            echo "Refusing to tag: the release would die after the tag was public."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
+          echo "tagged $TAG"
+
+          if [ "$HAS_PAT" != "true" ]; then
+            echo "::warning::TAG_PAT is not set, so this tag was pushed with GITHUB_TOKEN and will NOT start release.yml. Run the release workflow manually on $TAG, or add the secret."
+          fi

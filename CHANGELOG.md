@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.2.1 — 2026-08-16
+
+Release plumbing, and one thing that should never have been in the tarball.
+
+### Fixed
+
+- **`scripts/` no longer ships.** `files` listed it, so every install of this package
+  carried `scripts/check-tool-count.js` — a development check with nothing at runtime
+  reading it. `bin` is `src/index.js`; the script was dead weight in every consumer's
+  `node_modules`.
+
+### Changed
+
+- **One release workflow instead of two publishers racing on one event.**
+  `publish-npmjs.yml` and `publish-gpr.yml` both fired on `release: published`, which
+  meant a human had to cut the GitHub release by hand first, and neither carried any
+  of the guards a publish needs. `release.yml` replaces both: a `v*` tag runs the full
+  CI suite **as a dependency** (so a red suite can actually stop a publish), checks the
+  tag against `package.json`, extracts this section into the GitHub release, publishes
+  with `--provenance`, skips cleanly when the version is already on the registry
+  instead of dying on a 403, and then **polls the registry** — the read replica lags,
+  so *published* is a claim until it is served.
+
+  GitHub Packages is kept and gated behind a new `PUBLISH_GPR` variable. It previously
+  published on every release with no flag at all. Whether anyone consumes the package
+  from GPR could not be established, and removing a channel because you could not look
+  is not the same as knowing it is unused.
+
+- **`auto-tag.yml`**: a push to `master` whose version has no matching `v*` tag cuts
+  the tag, which starts the release. A merge that does not bump the version publishes
+  nothing — the decision to release stays a reviewed edit to one line. It refuses to
+  tag a version with no CHANGELOG section, and warns when `TAG_PAT` is unset, because
+  GitHub will not start a workflow from a tag pushed with `GITHUB_TOKEN`.
+
+### Added
+
+- `CONTRIBUTING.md` and `SECURITY.md`. A `prowl_` key is billing-bearing, and the
+  security page leads with that.
+
 ## v0.2.0 — 2026-08-15
 
 Audited command by command against the running server. Six of the findings cost
