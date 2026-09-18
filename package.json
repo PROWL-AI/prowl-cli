@@ -1,7 +1,7 @@
 {
   "name": "@prowl-ai/cli",
   "version": "0.2.1",
-  "description": "Prowl CLI — command-line client for the Prowl MCP: 448 market-intelligence tools (SEO, ads, SERP, scraping, AI) on pay-as-you-go USD wallet billing.",
+  "description": "Prowl CLI — command-line client for the Prowl MCP: 444 market-intelligence tools (SEO, ads, SERP, scraping, AI) on pay-as-you-go USD wallet billing.",
   "type": "module",
   "bin": {
     "prowl": "./src/index.js"
