@@ -5,6 +5,13 @@ on:
     branches: ["**"]
   pull_request:
   workflow_dispatch:
+  # The catalogue count drifts because the SERVER moves, not because this repo does —
+  # so a check that only runs on push cannot see it. Measured 2026-09-18: the last CI
+  # run here was 2026-08-16, and by then prowl.chat had gone 448 -> 444 while this
+  # package still published 448 on npm and in its README. A weekly tick is what turns
+  # "somebody has to remember" into "the repository notices".
+  schedule:
+    - cron: "17 6 * * 1"
   # Callable, so `release.yml` can depend on it. Re-implementing these checks as
   # steps inside the release is how a red suite stops being able to stop a publish:
   # a separate workflow going red cannot fail another one. The sibling repository

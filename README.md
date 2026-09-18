@@ -1,6 +1,6 @@
 # @prowl-ai/cli
 
-**Prowl CLI** — one command-line client for the [Prowl MCP](https://prowl.chat): **448 market-intelligence tools** across 15 providers (SEO & backlinks, 60+ SERP engines, ads, web scraping, AI) plus the full Prowl research pipeline, billed pay-as-you-go from a USD wallet.
+**Prowl CLI** — one command-line client for the [Prowl MCP](https://prowl.chat): **444 market-intelligence tools** across 15 providers (SEO & backlinks, 60+ SERP engines, ads, web scraping, AI) plus the full Prowl research pipeline, billed pay-as-you-go from a USD wallet.
 
 [![npm](https://img.shields.io/npm/v/@prowl-ai/cli?style=flat-square)](https://www.npmjs.com/package/@prowl-ai/cli)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square)](https://nodejs.org)
