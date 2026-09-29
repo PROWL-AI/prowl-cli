@@ -1,6 +1,6 @@
 # @prowl-ai/cli
 
-**Prowl CLI** — one command-line client for the [Prowl MCP](https://prowl.chat): **448 market-intelligence tools** across 15 providers (SEO & backlinks, 60+ SERP engines, ads, web scraping, AI) plus the full Prowl research pipeline, billed pay-as-you-go from a USD wallet.
+**Real-world market data from the shell.** `prowl` is the command-line client for the [Prowl MCP](https://prowl.chat): **444 market data tools** across 17 providers – search (102 SearchAPI engines), ads, SEO and backlinks, app stores, reviews, social, trends and finance. Each call is billed on its own from one USD wallet, and every number comes back with the tool that returned it. One call for one number; `prowl analyze` for a report when one call is not enough.
 
 [![npm](https://img.shields.io/npm/v/@prowl-ai/cli?style=flat-square)](https://www.npmjs.com/package/@prowl-ai/cli)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square)](https://nodejs.org)
@@ -64,17 +64,17 @@ Global flags: `--json` (machine-readable, one JSON document on stdout), `--key <
 
 Environment: `PROWL_API_KEY`, `PROWL_BASE_URL`, `PROWL_MCP_URL`, `PROWL_TIMEOUT_MS`.
 
-Recommended flow: `tools search` → `tools info` (check the cost) → `call`. Reach for `analyze` when the goal is a full report rather than one data point. Pass a stable `--session <id>` across consecutive calls to keep the report cache, history and spend scoped to one investigation — `artifact` and `export` read the report cached against that session.
+Recommended flow: `tools search` → `tools info` (check the cost) → `call`. Reach for `analyze` when one call is not enough: it plans many calls, cross-checks numeric claims against independent tools and composes a report. Pass a stable `--session <id>` across consecutive calls to keep the report cache, history and spend scoped to one investigation — `artifact` and `export` read the report cached against that session.
 
 ## Tiers, and the downgrade that is not a refusal
 
-`analyze` defaults to `--tier basic`. Each tier carries a hard provider-cost cap for the run — you are never billed more than the reserved hold.
+`analyze` defaults to `--tier basic`. Each tier carries a hard provider-cost cap for the run, and the wallet holds a fixed amount while it executes – you are never billed more than that hold, and what the run did not use is refunded.
 
-| Tier | Use for | Cost cap | Requires |
-|------|---------|---------:|----------|
-| `basic` | One question, fast turnaround | $2.50 | — |
-| `deep` | Full competitive report | $8.00 | Exploit+ subscription |
-| `max` | Exhaustive, research-grade | $18.00 | Blackops+ subscription |
+| Tier | Use for | Provider-cost cap | Wallet hold | Requires |
+|------|---------|---------:|---------:|----------|
+| `basic` | One question, fast turnaround | $5.00 | $15 | – |
+| `deep` | Full report, evidence-verified | $8.00 | $24 | Exploit+ subscription |
+| `max` | Exhaustive, claims adversarially checked | $18.00 | $54 | Blackops+ subscription |
 
 **A key without the subscription is not refused.** It is downgraded to `basic`, and the run executes and bills as `basic`. That is the right behaviour for the run and the wrong thing to learn afterwards, so check first:
 
@@ -111,6 +111,7 @@ Without `--watch` it returns a `session_id` immediately; poll it with `prowl ses
 ## Examples
 
 ```bash
+prowl tools search "google trends" --limit 5
 prowl tools search "backlinks" --limit 5
 prowl tools info majestic_get_back_link_data
 prowl call extract_domain_from_url --params '{"url":"https://stripe.com/pricing"}'

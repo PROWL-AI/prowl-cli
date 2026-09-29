@@ -40,7 +40,7 @@ test("version matches the package manifest", async () => {
 
 test("help states the catalogue count from the one place that holds it", async () => {
   const r = await run([]);
-  assert.match(r.out, new RegExp(`${API_TOOL_COUNT} market-intelligence tools`));
+  assert.match(r.out, new RegExp(`${API_TOOL_COUNT} market data tools`));
 });
 
 test("help lists every command the CLI actually routes", async () => {

@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.3.0 – 2026-09-29
+
+Real-world market data from the shell. The catalogue moved and so did the words for it;
+the banner and the tier line now say what the server serves.
+
+### Changed
+
+- **`prowl --help` and the package describe 444 market data tools.** `API_TOOL_COUNT`
+  in `src/config.js` was 448; `prowl.chat/mcp/skill.md` serves `→ 444 API tools`
+  (read 2026-09-29, `npm run check:tools` → *OK: 444 tools; 3 file(s) agree*). The
+  noun follows the product's positioning: "market data tools" replaces
+  "market-intelligence tools" in the banner, `package.json` and the README, which
+  also names the current provider count (17) and SearchAPI engine count (102, not
+  "60+").
+- **The basic tier's provider-cost cap is $5.00, not $2.50.** The banner and the README
+  quoted $2.50, a figure the server stopped using on 2026-09-27 when the basic cap grew
+  by the report reserve it had been missing. Deep ($8.00) and max ($18.00) were right.
+  The banner and README now also state the wallet hold per run – $15, $24 and $54 –
+  which is the figure a wallet actually sees.
+
+### Fixed
+
+- **`check:tools` reads the hosted document in either wording.** Its second anchor
+  matched only `<n> marketing intelligence API tools`; it now also accepts
+  `<n> market data tools`, and the repository's own stated-count pattern accepts the
+  same pair, so a stale figure written in the new wording is still caught. Both
+  wordings are fixtured in `test/tool-count.test.js`.
+
 ## v0.2.1 — 2026-08-16
 
 Release plumbing, and one thing that should never have been in the tarball.

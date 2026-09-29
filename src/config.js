@@ -14,9 +14,10 @@ export const VERSION = JSON.parse(readFileSync(new URL("../package.json", import
 // The catalogue size, stated in one place. It is a server-side fact, so nothing
 // here can keep it true on its own — `npm run check:tools` compares it against
 // what prowl.chat serves, and CI fails the build when they part. The repository
-// said 408 for two releases while the server served 448; a number restated in
-// prose with nothing checking it is a number that will drift.
-export const API_TOOL_COUNT = 448;
+// said 408 for two releases while the server served 448, and 448 again after the
+// server moved to 444 (2026-09); a number restated in prose with nothing checking
+// it is a number that will drift.
+export const API_TOOL_COUNT = 444;
 
 /**
  * Resolve the API key from, in order: an explicit `--key`, `PROWL_API_KEY`, and

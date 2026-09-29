@@ -13,7 +13,7 @@ import { artifactCmd, errorsCmd, exportCmd, playbooksCmd, statsCmd } from "./com
 
 export { VERSION };
 
-const HELP = `prowl — CLI for the Prowl MCP (${API_TOOL_COUNT} market-intelligence tools)
+const HELP = `prowl — CLI for the Prowl MCP (${API_TOOL_COUNT} market data tools)
 
 USAGE
   prowl <command> [args] [--json] [--key <prowl_...>]
@@ -50,7 +50,8 @@ ACCOUNT (free)
 FLAGS: --json  --key <k>  --quiet  -h/--help
 ENV:   PROWL_API_KEY  PROWL_BASE_URL  PROWL_MCP_URL  PROWL_TIMEOUT_MS
 
-TIERS: basic caps provider cost at $2.50, deep at $8.00, max at $18.00.
+TIERS: basic caps provider cost at $5.00, deep at $8.00, max at $18.00; the
+       wallet holds $15, $24 or $54 for the run and refunds what it did not use.
        deep needs an Exploit+ subscription and max a Blackops+ one; without it
        the run is NOT refused — it executes and bills as basic. Check first
        with \`prowl wallet\`, which names the modes your key can actually run.

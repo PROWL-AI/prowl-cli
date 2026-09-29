@@ -29,11 +29,15 @@ export const SOURCE = "https://prowl.chat/mcp/skill.md";
  * The server's own figure, from the hosted skill document.
  *
  * Two independent anchors, because a document that reworded one of them should
- * make this say so rather than silently stop finding anything.
+ * make this say so rather than silently stop finding anything. The second
+ * accepts both the wording the document used until 2026-09 (`444 marketing
+ * intelligence API tools`) and the one that replaced it (`444 market data
+ * tools`): the positioning moved, the fact did not, and an anchor that knew
+ * only one wording would have gone quiet the day the other shipped.
  */
 export function serverCount(text) {
   const found = new Set();
-  for (const re of [/→\s*(\d{2,5})\s+API\s+tools/gi, /\b(\d{2,5})\s+marketing[\s-]intelligence\s+API\s+tools/gi]) {
+  for (const re of [/→\s*(\d{2,5})\s+API\s+tools/gi, /\b(\d{2,5})\s+(?:marketing[\s-]intelligence|market[\s-]data)\s+(?:API\s+)?tools/gi]) {
     let m;
     while ((m = re.exec(text)) !== null) found.add(Number(m[1]));
   }
@@ -63,7 +67,7 @@ export function statedCounts(root = ROOT) {
   for (const rel of ["package.json", "README.md"]) {
     const text = readFileSync(join(root, rel), "utf8");
     const counts = [];
-    for (const re of [/\b(\d{2,5})\s+(?:market-intelligence\s+)?(?:API\s+)?tools?\b/gi, /\b(\d{2,5})-tool\b/gi, /tools-(\d{2,5})-/g]) {
+    for (const re of [/\b(\d{2,5})\s+(?:(?:market[\s-]intelligence|market[\s-]data)\s+)?(?:API\s+)?tools?\b/gi, /\b(\d{2,5})-tool\b/gi, /tools-(\d{2,5})-/g]) {
       let m;
       while ((m = re.exec(text)) !== null) counts.push(Number(m[1]));
     }
