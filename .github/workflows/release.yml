@@ -149,17 +149,22 @@ jobs:
         if: steps.pub.outputs.skip == 'false'
         run: |
           set -eu
-          # The read replica lags the write master by a minute or two, so a fresh
-          # publish can still 404 on read. "Published" is a claim until it is served.
-          for _ in $(seq 1 18); do
+          # The read replica lags the write master, so a fresh publish can still 404 on
+          # read. "Published" is a claim until it is served — and served means the TARBALL,
+          # which is what `npm install` fetches. 0.3.0 (2026-09-29): npm said "may take a few
+          # minutes", the metadata answered ~3 min after publish and the tarball 404'd for
+          # several minutes more, so a three-minute metadata check failed a good release.
+          # Ten minutes, and the tarball must download.
+          for _ in $(seq 1 60); do
             got=$(npm view "${{ steps.pub.outputs.name }}" version 2>/dev/null || echo "")
-            if [ "$got" = "${{ steps.pub.outputs.ver }}" ]; then
-              echo "OK: the registry serves ${{ steps.pub.outputs.name }}@$got"
+            if [ "$got" = "${{ steps.pub.outputs.ver }}" ] && \
+               npm pack "${{ steps.pub.outputs.name }}@${{ steps.pub.outputs.ver }}" --dry-run >/dev/null 2>&1; then
+              echo "OK: the registry serves ${{ steps.pub.outputs.name }}@$got, tarball included"
               exit 0
             fi
             sleep 10
           done
-          echo "the registry still does not serve ${{ steps.pub.outputs.ver }} after three minutes"
+          echo "the registry still does not serve ${{ steps.pub.outputs.ver }} (metadata + tarball) after ten minutes"
           exit 1
 
   gpr:
